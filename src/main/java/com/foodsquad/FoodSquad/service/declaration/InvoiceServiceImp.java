@@ -116,17 +116,6 @@ public class InvoiceServiceImp implements InvoiceService {
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
-        if (order.getMenuItemsWithQuantity() != null) {
-            for (Map.Entry<MenuItem, Integer> entry : order.getMenuItemsWithQuantity().entrySet()) {
-                MenuItem menuItem = entry.getKey();
-                if (menuItem != null && menuItem.getPrice() != null) {
-                    double originalPrice = menuItem.getPrice();
-                    double discountedPrice = originalPrice * 0.8; // -20%
-                    menuItem.setPrice(discountedPrice);
-                }
-            }
-        }
-
 
         // Calculate totals and tax details
         double totalHT = 0;
