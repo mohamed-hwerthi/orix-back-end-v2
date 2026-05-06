@@ -36,6 +36,10 @@ public class InvoiceServiceImp implements InvoiceService {
     private final TimbreRepository timbreRepository;
     private final String invoice_template_path = "/jasper/invoice.jrxml";
 
+    // Cache of compiled Jasper report — compile once, reuse across requests
+    private volatile JasperReport cachedInvoiceReport;
+    private final Object reportLock = new Object();
+
 
     Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
@@ -44,6 +48,32 @@ public class InvoiceServiceImp implements InvoiceService {
         this.orderService = orderService;
         this.orderRepository = orderRepository;
         this.timbreRepository = timbreRepository;
+    }
+
+    /** Pré-compile le template Jasper au démarrage de l'app (gain ~1-3s sur la 1ère facture). */
+    @jakarta.annotation.PostConstruct
+    public void warmupTemplate() {
+        try {
+            getCachedInvoiceReport();
+        } catch (Exception e) {
+            log.warn("Impossible de pré-compiler le template invoice : {}", e.getMessage());
+        }
+    }
+
+    private JasperReport getCachedInvoiceReport() throws JRException {
+        JasperReport local = cachedInvoiceReport;
+        if (local == null) {
+            synchronized (reportLock) {
+                local = cachedInvoiceReport;
+                if (local == null) {
+                    InputStream reportStream = getClass().getResourceAsStream(invoice_template_path);
+                    local = JasperCompileManager.compileReport(reportStream);
+                    cachedInvoiceReport = local;
+                    log.info("Invoice Jasper template compiled and cached");
+                }
+            }
+        }
+        return local;
     }
 
 
@@ -111,8 +141,7 @@ public class InvoiceServiceImp implements InvoiceService {
     }
 
     public byte[] generateInvoice(String orderId) throws Exception {
-        InputStream reportStream = getClass().getResourceAsStream(invoice_template_path);
-        JasperReport jasperReport = JasperCompileManager.compileReport(reportStream);
+        JasperReport jasperReport = getCachedInvoiceReport();
 
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
@@ -161,22 +190,35 @@ public class InvoiceServiceImp implements InvoiceService {
             items.add(itemData);
         }
 
+        // Apply discount from the order (authoritative)
+        double discountTTC = order.getDiscountAmount() != null ? order.getDiscountAmount() : 0.0;
+        boolean hasDiscount = discountTTC > 0;
+        double discountHT = 0.0;
+        if (hasDiscount && totalTTC > 0) {
+            // Pro-rata HT based on the same ratio as catalog HT/TTC
+            discountHT = round(discountTTC * (totalHT / totalTTC));
+        }
+
+        double subtotalHT = round(totalHT);
+        double subtotalTTC = round(totalTTC);
+        double netTTC = round(subtotalTTC - discountTTC);
+
         // Get the timbre fiscal amount from database
         Timbre timbre = timbreRepository.findAll().stream().findFirst().orElse(null);
         double timbreAmount = (timbre != null) ? timbre.getAmount() : 0.0;
 
-        // Check if we need to add timbre fiscal (when TTC >= 1 DT)
-        boolean addTimbre = (round(totalTTC) >= 1.0); // Changed from == 0.1 to >= 1.0
-        if (addTimbre) {
-            totalTTC += timbreAmount;
-            totalTTC = round(totalTTC); // Round after adding timbre
-        }
+        // Check if we need to add timbre fiscal (when TTC >= 1 DT) — base on net amount after discount
+        boolean addTimbre = (netTTC >= 1.0);
+        double finalTTC = addTimbre ? round(netTTC + timbreAmount) : netTTC;
 
         // Prepare parameters
         Map<String, Object> parameters = new HashMap<>();
         parameters.put("orderId", order.getId());
-        parameters.put("totalHT", round(totalHT));
-        parameters.put("totalTTC", round(totalTTC));
+        parameters.put("totalHT", subtotalHT);
+        parameters.put("totalTTC", finalTTC);
+        parameters.put("subtotalTTC", subtotalTTC);
+        parameters.put("discountTTC", round(discountTTC));
+        parameters.put("hasDiscount", hasDiscount);
         parameters.put("createdOn", order.getCreatedOn());
         parameters.put("taxDetails", new ArrayList<>(taxDetails.entrySet()));
         parameters.put("addTimbre", addTimbre);

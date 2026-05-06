@@ -32,6 +32,8 @@ import java.util.Map;
 public class MenuItemController {
 
     private final MenuItemService menuItemService;
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.foodsquad.FoodSquad.repository.StockLotRepository stockLotRepository;
 
     public MenuItemController(MenuItemService menuItemService) {
 
@@ -41,9 +43,6 @@ public class MenuItemController {
     @Operation(summary = "Create a new menu item", description = "Create a new menu item with the provided details.")
     @PostMapping
     public ResponseEntity<MenuItemDTO> createMenuItem(@Valid @RequestBody MenuItemDTO menuItemDTO) {
-        if (menuItemDTO.getCurrency() == null || menuItemDTO.getCurrency().getId() == null) {
-            throw new IllegalArgumentException("Currency ID is required");
-        }
          return menuItemService.createMenuItem(menuItemDTO);
     }
 
@@ -142,6 +141,44 @@ public class MenuItemController {
     public ResponseEntity<MenuItemDTO> findByQrCode(@Parameter(description = "Search by bar code  ", example = "0001236") @PathVariable("barCode") String barCode) {
 
         return ResponseEntity.ok(menuItemService.findByBarCode(barCode));
+    }
+
+    @Operation(summary = "Get low stock items", description = "Returns menu items where stockQuantity <= minStockAlert")
+    @GetMapping("/low-stock")
+    public ResponseEntity<List<MenuItemDTO>> getLowStockItems() {
+
+        return ResponseEntity.ok(menuItemService.getLowStockItems());
+    }
+
+    @Operation(summary = "Light stock summary for POS sync", description = "Returns id/qty/lowStock + nearest expiring lot for all items — fast, lightweight")
+    @GetMapping("/stock-summary")
+    public ResponseEntity<List<java.util.Map<String, Object>>> getStockSummary() {
+        List<Object[]> rows = menuItemService.getStockSummary();
+
+        // Build a map of nearest active lot expiry per menu item (in days from today)
+        java.time.LocalDate today = java.time.LocalDate.now();
+        java.util.Map<Long, Integer> nearestByItem = new java.util.HashMap<>();
+        for (com.foodsquad.FoodSquad.model.entity.StockLot lot : stockLotRepository.findExpiringBefore(today.plusDays(60))) {
+            long itemId = lot.getMenuItem().getId();
+            int days = (int) java.time.temporal.ChronoUnit.DAYS.between(today, lot.getExpiryDate());
+            Integer cur = nearestByItem.get(itemId);
+            if (cur == null || days < cur) nearestByItem.put(itemId, days);
+        }
+
+        List<java.util.Map<String, Object>> out = new java.util.ArrayList<>(rows.size());
+        for (Object[] r : rows) {
+            java.util.Map<String, Object> entry = new java.util.HashMap<>();
+            Long id = ((Number) r[0]).longValue();
+            Integer qty = r[1] != null ? ((Number) r[1]).intValue() : 0;
+            Integer min = r[2] != null ? ((Number) r[2]).intValue() : 0;
+            entry.put("id", id);
+            entry.put("stockQuantity", qty);
+            entry.put("lowStock", qty <= min);
+            Integer nearest = nearestByItem.get(id);
+            if (nearest != null) entry.put("nearestExpiryDays", nearest);
+            out.add(entry);
+        }
+        return ResponseEntity.ok(out);
     }
 
 }

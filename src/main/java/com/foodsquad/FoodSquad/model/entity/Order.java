@@ -3,7 +3,9 @@ package com.foodsquad.FoodSquad.model.entity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 @Entity
 @Table(name = "orders")
@@ -16,6 +18,17 @@ public class Order {
 
     @Column(nullable = false)
     private Double totalCost;
+
+    @Column(nullable = false)
+    private Double originalAmount = 0.0;
+
+    @Column(nullable = false)
+    private Double discountAmount = 0.0;
+
+    @ElementCollection
+    @CollectionTable(name = "order_applied_promotions", joinColumns = @JoinColumn(name = "order_id"))
+    @Column(name = "promotion_id")
+    private Set<Long> appliedPromotionIds = new HashSet<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -36,6 +49,14 @@ public class Order {
     @ManyToOne
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "cash_session_id")
+    private CashSession cashSession;
+
+    @Enumerated(EnumType.STRING)
+    @Column(length = 10)
+    private PaymentMethod paymentMethod;
 
 
     public String getId() {
@@ -106,6 +127,46 @@ public class Order {
     public void setPaid(Boolean paid) {
 
         this.paid = paid;
+    }
+
+    public Double getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(Double originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public Double getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public void setDiscountAmount(Double discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+
+    public Set<Long> getAppliedPromotionIds() {
+        return appliedPromotionIds;
+    }
+
+    public void setAppliedPromotionIds(Set<Long> appliedPromotionIds) {
+        this.appliedPromotionIds = appliedPromotionIds;
+    }
+
+    public CashSession getCashSession() {
+        return cashSession;
+    }
+
+    public void setCashSession(CashSession cashSession) {
+        this.cashSession = cashSession;
+    }
+
+    public PaymentMethod getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(PaymentMethod paymentMethod) {
+        this.paymentMethod = paymentMethod;
     }
 
 }

@@ -5,6 +5,7 @@ import com.foodsquad.FoodSquad.model.entity.*;
 import com.foodsquad.FoodSquad.repository.MenuItemRepository;
 import com.foodsquad.FoodSquad.repository.OrderRepository;
 import com.foodsquad.FoodSquad.repository.UserRepository;
+import com.foodsquad.FoodSquad.service.declaration.StockMovementService;
 import jakarta.persistence.EntityNotFoundException;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
@@ -19,9 +20,12 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,20 +37,116 @@ public class OrderService {
 
     private   final  MenuItemRepository menuItemRepository;
 
-    public OrderService(OrderRepository orderRepository, UserRepository userRepository, MenuItemRepository menuItemRepository ,  ModelMapper modelMapper) {
+    private final StockMovementService stockMovementService;
+
+    private final PromotionEngine promotionEngine;
+
+    private final CashSessionService cashSessionService;
+
+    public OrderService(OrderRepository orderRepository, UserRepository userRepository, MenuItemRepository menuItemRepository ,  ModelMapper modelMapper, StockMovementService stockMovementService, PromotionEngine promotionEngine, CashSessionService cashSessionService) {
 
         this.orderRepository = orderRepository;
         this.userRepository = userRepository;
         this.menuItemRepository = menuItemRepository;
         this.modelMapper = modelMapper;
+        this.stockMovementService = stockMovementService;
+        this.promotionEngine = promotionEngine;
+        this.cashSessionService = cashSessionService;
     }
 
     private ModelMapper modelMapper;
 
+    private static class PricingResult {
+        double original;
+        double total;
+        double discount;
+        Set<Long> appliedPromotionIds;
+    }
+
+    private PricingResult priceOrder(Map<MenuItem, Integer> menuItemsWithQuantity, String promoCode, String userId) {
+        // Pre-compute order subtotal (no promo) for minOrderAmount check
+        double original = 0.0;
+        for (Map.Entry<MenuItem, Integer> e : menuItemsWithQuantity.entrySet()) {
+            original += e.getKey().getPrice() * e.getValue();
+        }
+
+        // Build candidate list: auto promos + (optionally) the code promo
+        List<Promotion> autoPromos = promotionEngine.loadAutoApplicable();
+        List<Promotion> candidates = new ArrayList<>(autoPromos);
+        if (promoCode != null && !promoCode.isBlank()) {
+            promotionEngine.validateCode(promoCode).ifPresent(candidates::add);
+        }
+
+        // Filter candidates by anti-abuse rules (min order, oncePerUser, firstOrderOnly)
+        List<Promotion> applicable = promotionEngine.filterEligible(candidates, userId, original);
+
+        // First pass: per-item best promo + accumulate per-promo discount
+        double total = 0.0;
+        Set<Long> appliedIds = new HashSet<>();
+        Map<Long, Double> discountByPromoId = new HashMap<>();
+        Map<Long, Promotion> promoById = new HashMap<>();
+
+        for (Map.Entry<MenuItem, Integer> entry : menuItemsWithQuantity.entrySet()) {
+            MenuItem item = entry.getKey();
+            int qty = entry.getValue();
+            PromotionEngine.AppliedPrice ap = promotionEngine.computePrice(item, applicable);
+            total += ap.unitPrice * qty;
+            if (ap.promotion != null && ap.promotion.getId() != null) {
+                Long pid = ap.promotion.getId();
+                appliedIds.add(pid);
+                promoById.put(pid, ap.promotion);
+                discountByPromoId.merge(pid, ap.discount * qty, Double::sum);
+            }
+        }
+
+        // Second pass: cap each promo's contribution at maxDiscountAmount
+        double extraToReturn = 0.0;
+        for (Map.Entry<Long, Double> e : discountByPromoId.entrySet()) {
+            Promotion p = promoById.get(e.getKey());
+            double accumulated = e.getValue();
+            double capped = promotionEngine.capPromotionDiscount(p, accumulated);
+            if (capped < accumulated) {
+                extraToReturn += accumulated - capped;
+            }
+        }
+        total += extraToReturn;
+
+        PricingResult result = new PricingResult();
+        result.original = round2(original);
+        result.total = round2(total);
+        result.discount = round2(result.original - result.total);
+        result.appliedPromotionIds = appliedIds;
+        return result;
+    }
+
+    private double round2(double v) {
+        return BigDecimal.valueOf(v).setScale(2, RoundingMode.HALF_UP).doubleValue();
+    }
+
     private User getCurrentUser() {
-        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Not authenticated");
+        }
+        Object principal = auth.getPrincipal();
+        String email;
+        if (principal instanceof UserDetails ud) {
+            email = ud.getUsername();
+        } else if (principal instanceof String s) {
+            email = s;
+        } else {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid session");
+        }
+        if (email == null || email.isBlank() || "anonymousUser".equals(email)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Session expired");
+        }
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        "User not found for email: " + email));
     }
 
     private void checkOwnership(User owner) {
@@ -63,31 +163,72 @@ public class OrderService {
         User user = userRepository.findByEmail(orderDTO.getUserEmail())
                 .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + orderDTO.getUserEmail()));
 
-        Map<Long, Integer> menuItemQuantities = orderDTO.getMenuItemQuantities();
-        Map<MenuItem, Integer> menuItemsWithQuantity = new HashMap<>();
-        Double totalCost = 0.0;
+        Map<MenuItem, Integer> menuItemsWithQuantity = resolveItems(orderDTO.getMenuItemQuantities());
+        checkStockAvailability(menuItemsWithQuantity);
+        PricingResult pricing = priceOrder(menuItemsWithQuantity, orderDTO.getPromoCode(), user.getId());
 
-        for (Map.Entry<Long, Integer> entry : menuItemQuantities.entrySet()) {
-            MenuItem menuItem = menuItemRepository.findById(entry.getKey())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid menu item ID: " + entry.getKey()));
-            int quantity = entry.getValue() != null ? entry.getValue() : 1;
-            menuItemsWithQuantity.put(menuItem, quantity);
-            totalCost += menuItem.getPrice() * quantity;
-        }
-        // Round the totalCost to 2 decimal places
-        BigDecimal roundedTotalCost = BigDecimal.valueOf(totalCost).setScale(2, RoundingMode.HALF_UP);
+        // Require an open cash session for the current cashier
+        com.foodsquad.FoodSquad.model.entity.CashSession session = cashSessionService.requireOpenForCurrentUser();
 
         Order order = new Order();
         order.setUser(user);
+        order.setCashSession(session);
+        order.setPaymentMethod(orderDTO.getPaymentMethod() != null
+                ? orderDTO.getPaymentMethod()
+                : com.foodsquad.FoodSquad.model.entity.PaymentMethod.CASH);
         order.setMenuItemsWithQuantity(menuItemsWithQuantity);
         order.setStatus(OrderStatus.valueOf(orderDTO.getStatus().toUpperCase()));
-        order.setTotalCost(roundedTotalCost.doubleValue());
+        order.setTotalCost(pricing.total);
+        order.setOriginalAmount(pricing.original);
+        order.setDiscountAmount(pricing.discount);
+        order.setAppliedPromotionIds(pricing.appliedPromotionIds);
         order.setCreatedOn(orderDTO.getCreatedOn());
         order.setPaid(true);
 
         orderRepository.save(order);
+
+        for (Map.Entry<MenuItem, Integer> entry : menuItemsWithQuantity.entrySet()) {
+            stockMovementService.recordSaleMovement(entry.getKey().getId(), entry.getValue(), "ORDER:" + order.getId());
+        }
+
+        promotionEngine.incrementUsage(pricing.appliedPromotionIds, user.getId());
+
         OrderDTO responseDTO = modelMapper.map(order, OrderDTO.class);
         return ResponseEntity.status(HttpStatus.CREATED).body(responseDTO);
+    }
+
+    private Map<MenuItem, Integer> resolveItems(Map<Long, Integer> menuItemQuantities) {
+        // Single batched query instead of N findById calls
+        List<MenuItem> found = menuItemRepository.findAllById(menuItemQuantities.keySet());
+        if (found.size() != menuItemQuantities.size()) {
+            Set<Long> foundIds = found.stream().map(MenuItem::getId).collect(Collectors.toSet());
+            List<Long> missing = menuItemQuantities.keySet().stream()
+                    .filter(id -> !foundIds.contains(id))
+                    .collect(Collectors.toList());
+            throw new IllegalArgumentException("Invalid menu item IDs: " + missing);
+        }
+        Map<MenuItem, Integer> result = new HashMap<>();
+        for (MenuItem item : found) {
+            int qty = menuItemQuantities.getOrDefault(item.getId(), 1);
+            result.put(item, qty);
+        }
+        return result;
+    }
+
+    private void checkStockAvailability(Map<MenuItem, Integer> items) {
+        java.util.List<com.foodsquad.FoodSquad.exception.InsufficientStockException.Item> failed = new java.util.ArrayList<>();
+        for (Map.Entry<MenuItem, Integer> e : items.entrySet()) {
+            MenuItem item = e.getKey();
+            int qty = e.getValue();
+            int available = item.getStockQuantity() != null ? item.getStockQuantity() : 0;
+            if (qty > available && !Boolean.TRUE.equals(item.getAllowNegativeStock())) {
+                failed.add(new com.foodsquad.FoodSquad.exception.InsufficientStockException.Item(
+                        item.getId(), item.getTitle(), qty, available));
+            }
+        }
+        if (!failed.isEmpty()) {
+            throw new com.foodsquad.FoodSquad.exception.InsufficientStockException(failed);
+        }
     }
 
     public List<OrderDTO> getAllOrders(int page, int size) {
@@ -126,31 +267,20 @@ public class OrderService {
                 .orElseThrow(() -> new EntityNotFoundException("Order not found for ID: " + id));
         checkOwnership(existingOrder.getUser());
 
-        // Update user
         User user = userRepository.findByEmail(orderDTO.getUserEmail())
                 .orElseThrow(() -> new IllegalArgumentException("User not found with email: " + orderDTO.getUserEmail()));
         existingOrder.setUser(user);
 
-        // Update menu items with quantities
-        Map<Long, Integer> menuItemQuantities = orderDTO.getMenuItemQuantities();
-        Map<MenuItem, Integer> menuItemsWithQuantity = new HashMap<>();
-        Double totalCost = 0.0;
-
-        for (Map.Entry<Long, Integer> entry : menuItemQuantities.entrySet()) {
-            MenuItem menuItem = menuItemRepository.findById(entry.getKey())
-                    .orElseThrow(() -> new IllegalArgumentException("Invalid menu item ID: " + entry.getKey()));
-            int quantity = entry.getValue() != null ? entry.getValue() : 1; // Default to 1 if quantity is null
-            menuItemsWithQuantity.put(menuItem, quantity);
-            totalCost += menuItem.getPrice() * quantity;
-        }
-        // Round the totalCost to 2 decimal places
-        BigDecimal roundedTotalCost = BigDecimal.valueOf(totalCost).setScale(2, RoundingMode.HALF_UP);
+        Map<MenuItem, Integer> menuItemsWithQuantity = resolveItems(orderDTO.getMenuItemQuantities());
+        checkStockAvailability(menuItemsWithQuantity);
+        PricingResult pricing = priceOrder(menuItemsWithQuantity, orderDTO.getPromoCode(), user.getId());
 
         existingOrder.setMenuItemsWithQuantity(menuItemsWithQuantity);
-
-        // Update other fields
         existingOrder.setStatus(OrderStatus.valueOf(orderDTO.getStatus().toUpperCase()));
-        existingOrder.setTotalCost(roundedTotalCost.doubleValue());
+        existingOrder.setTotalCost(pricing.total);
+        existingOrder.setOriginalAmount(pricing.original);
+        existingOrder.setDiscountAmount(pricing.discount);
+        existingOrder.setAppliedPromotionIds(pricing.appliedPromotionIds);
         existingOrder.setCreatedOn(orderDTO.getCreatedOn());
         existingOrder.setPaid(orderDTO.getPaid());
 
@@ -159,6 +289,58 @@ public class OrderService {
         return ResponseEntity.ok(updatedOrderDTO);
     }
 
+
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<OrderDTO> refundOrder(String id, com.foodsquad.FoodSquad.model.dto.RefundRequestDTO request) {
+        Order order = orderRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Order not found for ID: " + id));
+        if (order.getStatus() == OrderStatus.REFUNDED) {
+            throw new IllegalArgumentException("Order is already fully refunded");
+        }
+        if (request.getItems() == null || request.getItems().isEmpty()) {
+            throw new IllegalArgumentException("No items to refund");
+        }
+
+        // Build a quick lookup of remaining quantities on the order
+        Map<Long, Integer> remaining = new HashMap<>();
+        for (Map.Entry<MenuItem, Integer> e : order.getMenuItemsWithQuantity().entrySet()) {
+            remaining.merge(e.getKey().getId(), e.getValue(), Integer::sum);
+        }
+
+        boolean restockable = !"DAMAGED".equalsIgnoreCase(request.getReason())
+                && !"EXPIRED".equalsIgnoreCase(request.getReason());
+
+        int totalRefundedUnits = 0;
+        for (com.foodsquad.FoodSquad.model.dto.RefundRequestDTO.RefundLine line : request.getItems()) {
+            Integer available = remaining.get(line.getMenuItemId());
+            if (available == null || available <= 0) {
+                throw new IllegalArgumentException("Item " + line.getMenuItemId() + " not in this order");
+            }
+            int qty = Math.min(line.getQuantity(), available);
+            if (qty <= 0) continue;
+
+            if (restockable) {
+                stockMovementService.recordReturnMovement(
+                        line.getMenuItemId(), qty,
+                        "REFUND:" + order.getId(),
+                        request.getReason());
+            } else {
+                stockMovementService.recordLossMovement(
+                        line.getMenuItemId(), qty,
+                        "REFUND:" + order.getId(),
+                        request.getReason());
+            }
+            totalRefundedUnits += qty;
+        }
+
+        // Determine partial vs full refund: count total units in order
+        int totalUnits = order.getMenuItemsWithQuantity().values().stream().mapToInt(Integer::intValue).sum();
+        order.setStatus(totalRefundedUnits >= totalUnits ? OrderStatus.REFUNDED : OrderStatus.PARTIALLY_REFUNDED);
+        orderRepository.save(order);
+
+        OrderDTO responseDTO = modelMapper.map(order, OrderDTO.class);
+        return ResponseEntity.ok(responseDTO);
+    }
 
     public ResponseEntity<Map<String, String>> deleteOrder(String id) {
         Order order = orderRepository.findById(id)

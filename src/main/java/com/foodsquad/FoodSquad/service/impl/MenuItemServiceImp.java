@@ -82,10 +82,29 @@ public class MenuItemServiceImp implements MenuItemService {
     }
 
     private User getCurrentUser() {
-
-        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Not authenticated");
+        }
+        Object principal = auth.getPrincipal();
+        String email;
+        if (principal instanceof UserDetails ud) {
+            email = ud.getUsername();
+        } else if (principal instanceof String s) {
+            email = s;
+        } else {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid session");
+        }
+        if (email == null || email.isBlank() || "anonymousUser".equals(email)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Session expired");
+        }
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        "User not found for email: " + email));
     }
 
     private void checkOwnership(MenuItem menuItem) {
@@ -102,6 +121,22 @@ public class MenuItemServiceImp implements MenuItemService {
         MenuItem menuItem = menuItemMapper.toEntity(menuItemDTO);
         User currentUser = getCurrentUser();
         menuItem.setUser(currentUser);
+
+        // Defensive defaults for non-null entity fields that the DTO may not send
+        if (menuItem.getIsActive() == null) menuItem.setIsActive(true);
+        if (menuItem.getAllowNegativeStock() == null) menuItem.setAllowNegativeStock(false);
+        if (menuItem.getHasExpiryDate() == null) menuItem.setHasExpiryDate(false);
+        if (menuItem.getStockQuantity() == null) menuItem.setStockQuantity(0);
+        if (menuItem.getMinStockAlert() == null) menuItem.setMinStockAlert(0);
+        if (menuItem.getPrice() == null) menuItem.setPrice(0.0);
+
+        // Auto-assign currency: explicit ID > first available
+        if (menuItemDTO.getCurrency() != null && menuItemDTO.getCurrency().getId() != null) {
+            currencyRepository.findById(menuItemDTO.getCurrency().getId()).ifPresent(menuItem::setCurrency);
+        } else {
+            currencyRepository.findAll().stream().findFirst().ifPresent(menuItem::setCurrency);
+        }
+
         if (menuItemDTO.getTax() != null) {
             Tax tax = this.taxService.createTax(menuItemDTO);
             menuItem.setTax(tax);
@@ -385,6 +420,26 @@ public class MenuItemServiceImp implements MenuItemService {
         return menuItemRepository.findByBarCode(qrCode)
                 .map(menuItemMapper::toDto)
                 .orElseThrow(() -> new EntityNotFoundException("MenuItem not found for qrCode"));
+    }
+
+    @Override
+    public List<MenuItemDTO> getLowStockItems() {
+
+        logger.debug("Getting low stock menu items");
+        return menuItemRepository.findLowStockItems().stream()
+                .map(menuItem -> {
+                    List<CategoryDTO> cats = menuItem.getCategories().stream().map(categoryMapper::toDto).toList();
+                    List<MediaDTO> medias = menuItem.getMedias().stream().map(mediaMapper::toDto).toList();
+                    CurrencyDTO currency = currencyMapper.toDto(menuItem.getCurrency());
+                    TaxDTO tax = taxMapper.toDto(menuItem.getTax());
+                    return new MenuItemDTO(menuItem, 0, 0L, 0.0, cats, medias, currency, tax);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<Object[]> getStockSummary() {
+        return menuItemRepository.findStockSummary();
     }
     private double roundToScale(double value, int scale) {
         if (scale < 0) throw new IllegalArgumentException("Scale must be a positive integer");

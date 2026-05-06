@@ -36,9 +36,29 @@ public class ReviewService {
     private ModelMapper modelMapper;
 
     private User getCurrentUser() {
-        UserDetails userDetails = (UserDetails) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
-        return userRepository.findByEmail(userDetails.getUsername())
-                .orElseThrow(() -> new IllegalArgumentException("User not found"));
+        var auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Not authenticated");
+        }
+        Object principal = auth.getPrincipal();
+        String email;
+        if (principal instanceof UserDetails ud) {
+            email = ud.getUsername();
+        } else if (principal instanceof String s) {
+            email = s;
+        } else {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Invalid session");
+        }
+        if (email == null || email.isBlank() || "anonymousUser".equals(email)) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "Session expired");
+        }
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        "User not found for email: " + email));
     }
 
     public ReviewDTO createReview(ReviewDTO reviewDTO) {

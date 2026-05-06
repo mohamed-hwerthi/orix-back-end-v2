@@ -31,6 +31,33 @@ public class MenuItem {
     @Column(nullable = true, name = "codeBar", unique = true)
     private String barCode;
 
+    @Column(nullable = true, unique = true)
+    private String sku;
+
+    @Column(nullable = true)
+    private Double purchasePrice;
+
+    @Column(nullable = false)
+    private Integer stockQuantity = 0;
+
+    @Column(nullable = false)
+    private Integer minStockAlert = 0;
+
+    @Column(nullable = true, length = 20)
+    private String unit;
+
+    @Column(nullable = false)
+    private Boolean isActive = true;
+
+    @Column(nullable = false)
+    private Boolean allowNegativeStock = false;
+
+    @Column
+    private Integer reorderQty;
+
+    @Column(nullable = false)
+    private Boolean hasExpiryDate = false;
+
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)

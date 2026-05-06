@@ -7,7 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 
 public class OrderDTO {
@@ -28,6 +30,17 @@ public class OrderDTO {
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Double totalCost;
 
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Double originalAmount;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Double discountAmount;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Set<Long> appliedPromotionIds = new HashSet<>();
+
+    private String promoCode;
+
     @NotNull(message = "Creation date is required")
     private LocalDateTime createdOn;
 
@@ -36,6 +49,11 @@ public class OrderDTO {
 
     @Schema(example = "admin@example.com" )
     private String userEmail;
+
+    private com.foodsquad.FoodSquad.model.entity.PaymentMethod paymentMethod;
+
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Long cashSessionId;
 
     // Public no-argument constructor
     public OrderDTO() {
@@ -108,5 +126,53 @@ public class OrderDTO {
 
     public void setUserEmail(String userEmail) {
         this.userEmail = userEmail;
+    }
+
+    public Double getOriginalAmount() {
+        return originalAmount;
+    }
+
+    public void setOriginalAmount(Double originalAmount) {
+        this.originalAmount = originalAmount;
+    }
+
+    public Double getDiscountAmount() {
+        return discountAmount;
+    }
+
+    public void setDiscountAmount(Double discountAmount) {
+        this.discountAmount = discountAmount;
+    }
+
+    public Set<Long> getAppliedPromotionIds() {
+        return appliedPromotionIds;
+    }
+
+    public void setAppliedPromotionIds(Set<Long> appliedPromotionIds) {
+        this.appliedPromotionIds = appliedPromotionIds;
+    }
+
+    public String getPromoCode() {
+        return promoCode;
+    }
+
+    public void setPromoCode(String promoCode) {
+        this.promoCode = promoCode;
+    }
+
+    public com.foodsquad.FoodSquad.model.entity.PaymentMethod getPaymentMethod() {
+        return paymentMethod;
+    }
+
+    public void setPaymentMethod(com.foodsquad.FoodSquad.model.entity.PaymentMethod paymentMethod) {
+        this.paymentMethod = paymentMethod;
+    }
+
+    public Long getCashSessionId() {
+        return cashSessionId;
+    }
+
+    public void setCashSessionId(Long cashSessionId) {
+        this.cashSessionId = cashSessionId;
     }
 }

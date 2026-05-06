@@ -20,8 +20,19 @@ public class MenuItemDTO {
 
     private String description;
     private String barCode;
+    private String sku;
     @Positive(message = "Price must be positive")
     private Double price;
+    private Double purchasePrice;
+    private Integer stockQuantity;
+    private Integer minStockAlert;
+    private String unit;
+    private Boolean isActive;
+    private Boolean allowNegativeStock;
+    private Integer reorderQty;
+    private Boolean hasExpiryDate;
+    @JsonProperty(access = JsonProperty.Access.READ_ONLY)
+    private Boolean lowStock;
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
     private Integer salesCount;
     @JsonProperty(access = JsonProperty.Access.READ_ONLY)
@@ -43,6 +54,21 @@ public class MenuItemDTO {
 
     }
 
+    private void copyStockFields(MenuItem menuItem) {
+        this.sku = menuItem.getSku();
+        this.purchasePrice = menuItem.getPurchasePrice();
+        this.stockQuantity = menuItem.getStockQuantity();
+        this.minStockAlert = menuItem.getMinStockAlert();
+        this.unit = menuItem.getUnit();
+        this.isActive = menuItem.getIsActive();
+        this.allowNegativeStock = Boolean.TRUE.equals(menuItem.getAllowNegativeStock());
+        this.reorderQty = menuItem.getReorderQty();
+        this.hasExpiryDate = Boolean.TRUE.equals(menuItem.getHasExpiryDate());
+        Integer qty = menuItem.getStockQuantity();
+        Integer min = menuItem.getMinStockAlert();
+        this.lowStock = (qty != null && min != null && qty <= min);
+    }
+
     public MenuItemDTO(MenuItem menuItem, int salesCount, long reviewCount, double averageRating , List<CategoryDTO> categories ,  List < MediaDTO> mediaDTOS , CurrencyDTO currency) {
 
         this.id = menuItem.getId();
@@ -56,6 +82,7 @@ public class MenuItemDTO {
         this.reviewCount = reviewCount;
         this.averageRating = averageRating;
         this.currency=currency;
+        copyStockFields(menuItem);
     }
     public MenuItemDTO(MenuItem menuItem, int salesCount, long reviewCount, double averageRating , List<CategoryDTO> categories ,  List < MediaDTO> mediaDTOS ) {
 
@@ -69,6 +96,7 @@ public class MenuItemDTO {
         this.salesCount = salesCount;
         this.reviewCount = reviewCount;
         this.averageRating = averageRating;
+        copyStockFields(menuItem);
     }
     public MenuItemDTO(MenuItem menuItem, int salesCount, long reviewCount, double averageRating , List<CategoryDTO> categories ,  List < MediaDTO> mediaDTOS,TaxDTO taxDTO ) {
 
@@ -83,6 +111,7 @@ public class MenuItemDTO {
         this.reviewCount = reviewCount;
         this.averageRating = averageRating;
         this.tax=taxDTO;
+        copyStockFields(menuItem);
     }
     public MenuItemDTO(MenuItem menuItem, int salesCount, long reviewCount, double averageRating , List<CategoryDTO> categories ,  List < MediaDTO> mediaDTOS,CurrencyDTO currency,TaxDTO taxDTO ) {
 
@@ -98,6 +127,6 @@ public class MenuItemDTO {
         this.averageRating = averageRating;
         this.currency=currency;
         this.tax=taxDTO;
-
+        copyStockFields(menuItem);
     }
 }

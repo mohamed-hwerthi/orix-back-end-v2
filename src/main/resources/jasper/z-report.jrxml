@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jasperReport xmlns="http://jasperreports.sourceforge.net/jasperreports"
+              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+              xsi:schemaLocation="http://jasperreports.sourceforge.net/jasperreports http://jasperreports.sourceforge.net/xsd/jasperreport.xsd"
+              name="ZReport" pageWidth="320" columnWidth="300"
+              leftMargin="10" rightMargin="10" topMargin="10" bottomMargin="10">
+
+  <parameter name="zNumber" class="java.lang.String"/>
+  <parameter name="openedAt" class="java.lang.String"/>
+  <parameter name="closedAt" class="java.lang.String"/>
+  <parameter name="cashier" class="java.lang.String"/>
+  <parameter name="closedBy" class="java.lang.String"/>
+  <parameter name="openingAmount" class="java.lang.Double"/>
+
+  <parameter name="ordersCount" class="java.lang.Integer"/>
+  <parameter name="unitsSold" class="java.lang.Integer"/>
+  <parameter name="totalRevenue" class="java.lang.Double"/>
+  <parameter name="totalDiscount" class="java.lang.Double"/>
+  <parameter name="cashSales" class="java.lang.Double"/>
+  <parameter name="cardSales" class="java.lang.Double"/>
+  <parameter name="mixedSales" class="java.lang.Double"/>
+  <parameter name="otherSales" class="java.lang.Double"/>
+  <parameter name="refundsCount" class="java.lang.Integer"/>
+  <parameter name="refundsAmount" class="java.lang.Double"/>
+  <parameter name="cashIn" class="java.lang.Double"/>
+  <parameter name="cashOut" class="java.lang.Double"/>
+
+  <parameter name="expectedCash" class="java.lang.Double"/>
+  <parameter name="countedCash" class="java.lang.Double"/>
+  <parameter name="cashVariance" class="java.lang.Double"/>
+  <parameter name="expectedCard" class="java.lang.Double"/>
+  <parameter name="countedCard" class="java.lang.Double"/>
+  <parameter name="cardVariance" class="java.lang.Double"/>
+
+  <parameter name="closingNotes" class="java.lang.String"/>
+
+  <field name="title" class="java.lang.String"/>
+  <field name="quantitySold" class="java.lang.Long"/>
+  <field name="revenue" class="java.lang.Double"/>
+
+  <title>
+    <band height="80">
+      <staticText>
+        <reportElement x="0" y="0" width="300" height="22" forecolor="#000000"/>
+        <textElement textAlignment="Center" verticalAlignment="Middle">
+          <font size="14" isBold="true"/>
+        </textElement>
+        <text><![CDATA[ORIX BIO — Z-REPORT]]></text>
+      </staticText>
+      <textField>
+        <reportElement x="0" y="24" width="300" height="14"/>
+        <textElement textAlignment="Center"><font size="10" isBold="true"/></textElement>
+        <textFieldExpression><![CDATA[$P{zNumber}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement x="0" y="42" width="80" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <text><![CDATA[Ouvert :]]></text>
+      </staticText>
+      <textField>
+        <reportElement x="80" y="42" width="220" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <textFieldExpression><![CDATA[$P{openedAt}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement x="0" y="56" width="80" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <text><![CDATA[Clôturé :]]></text>
+      </staticText>
+      <textField>
+        <reportElement x="80" y="56" width="220" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <textFieldExpression><![CDATA[$P{closedAt}]]></textFieldExpression>
+      </textField>
+    </band>
+  </title>
+
+  <pageHeader>
+    <band height="60">
+      <staticText>
+        <reportElement x="0" y="0" width="80" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <text><![CDATA[Caissier :]]></text>
+      </staticText>
+      <textField>
+        <reportElement x="80" y="0" width="220" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <textFieldExpression><![CDATA[$P{cashier}]]></textFieldExpression>
+      </textField>
+      <staticText>
+        <reportElement x="0" y="14" width="80" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <text><![CDATA[Clôt. par :]]></text>
+      </staticText>
+      <textField>
+        <reportElement x="80" y="14" width="220" height="14"/>
+        <textElement><font size="9"/></textElement>
+        <textFieldExpression><![CDATA[$P{closedBy}]]></textFieldExpression>
+      </textField>
+      <line><reportElement x="0" y="32" width="300" height="1"/></line>
+      <staticText>
+        <reportElement x="0" y="36" width="300" height="20"/>
+        <textElement textAlignment="Center"><font size="11" isBold="true"/></textElement>
+        <text><![CDATA[VENTES]]></text>
+      </staticText>
+    </band>
+  </pageHeader>
+
+  <columnHeader>
+    <band height="200">
+      <!-- Sales summary -->
+      <staticText><reportElement x="0" y="0" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Commandes :]]></text></staticText>
+      <textField><reportElement x="200" y="0" width="100" height="14"/><textElement textAlignment="Right"><font size="9" isBold="true"/></textElement><textFieldExpression><![CDATA[$P{ordersCount}]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="14" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Articles vendus :]]></text></staticText>
+      <textField><reportElement x="200" y="14" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[$P{unitsSold}]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="28" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[CA total :]]></text></staticText>
+      <textField><reportElement x="200" y="28" width="100" height="14"/><textElement textAlignment="Right"><font size="10" isBold="true"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{totalRevenue})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="42" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Réductions promo :]]></text></staticText>
+      <textField><reportElement x="200" y="42" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("-%.3f DT", $P{totalDiscount})]]></textFieldExpression></textField>
+
+      <line><reportElement x="0" y="60" width="300" height="1"/></line>
+      <staticText><reportElement x="0" y="64" width="300" height="14"/><textElement><font size="10" isBold="true"/></textElement><text><![CDATA[Par méthode de paiement]]></text></staticText>
+
+      <staticText><reportElement x="0" y="80" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Espèces :]]></text></staticText>
+      <textField><reportElement x="200" y="80" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{cashSales})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="94" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Carte :]]></text></staticText>
+      <textField><reportElement x="200" y="94" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{cardSales})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="108" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Mixte :]]></text></staticText>
+      <textField><reportElement x="200" y="108" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{mixedSales})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="122" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Autre :]]></text></staticText>
+      <textField><reportElement x="200" y="122" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{otherSales})]]></textFieldExpression></textField>
+
+      <line><reportElement x="0" y="140" width="300" height="1"/></line>
+      <staticText><reportElement x="0" y="144" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Remboursements :]]></text></staticText>
+      <textField><reportElement x="200" y="144" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[$P{refundsCount} + " (-" + String.format("%.3f", $P{refundsAmount}) + ")"]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="158" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Mouvements caisse + :]]></text></staticText>
+      <textField><reportElement x="200" y="158" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{cashIn})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="172" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Mouvements caisse - :]]></text></staticText>
+      <textField><reportElement x="200" y="172" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{cashOut})]]></textFieldExpression></textField>
+    </band>
+  </columnHeader>
+
+  <detail>
+    <band height="14">
+      <textField><reportElement x="0" y="0" width="180" height="14"/><textElement><font size="8"/></textElement><textFieldExpression><![CDATA[$F{title}]]></textFieldExpression></textField>
+      <textField><reportElement x="180" y="0" width="40" height="14"/><textElement textAlignment="Right"><font size="8"/></textElement><textFieldExpression><![CDATA[$F{quantitySold}]]></textFieldExpression></textField>
+      <textField><reportElement x="220" y="0" width="80" height="14"/><textElement textAlignment="Right"><font size="8"/></textElement><textFieldExpression><![CDATA[String.format("%.3f", $F{revenue})]]></textFieldExpression></textField>
+    </band>
+  </detail>
+
+  <summary>
+    <band height="220">
+      <line><reportElement x="0" y="0" width="300" height="1"/></line>
+      <staticText><reportElement x="0" y="4" width="300" height="16"/><textElement textAlignment="Center"><font size="11" isBold="true"/></textElement><text><![CDATA[FOND DE CAISSE & COMPTAGE]]></text></staticText>
+
+      <staticText><reportElement x="0" y="24" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Fond initial :]]></text></staticText>
+      <textField><reportElement x="200" y="24" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{openingAmount})]]></textFieldExpression></textField>
+
+      <line><reportElement x="0" y="44" width="300" height="1"/></line>
+      <staticText><reportElement x="0" y="48" width="300" height="14"/><textElement><font size="10" isBold="true"/></textElement><text><![CDATA[ESPÈCES]]></text></staticText>
+
+      <staticText><reportElement x="0" y="64" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Théorique :]]></text></staticText>
+      <textField><reportElement x="200" y="64" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{expectedCash})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="78" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Compté :]]></text></staticText>
+      <textField><reportElement x="200" y="78" width="100" height="14"/><textElement textAlignment="Right"><font size="9" isBold="true"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{countedCash})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="92" width="200" height="14"/><textElement><font size="9" isBold="true"/></textElement><text><![CDATA[Écart :]]></text></staticText>
+      <textField><reportElement x="200" y="92" width="100" height="14"/><textElement textAlignment="Right"><font size="10" isBold="true"/></textElement><textFieldExpression><![CDATA[String.format("%+.3f DT", $P{cashVariance})]]></textFieldExpression></textField>
+
+      <line><reportElement x="0" y="112" width="300" height="1"/></line>
+      <staticText><reportElement x="0" y="116" width="300" height="14"/><textElement><font size="10" isBold="true"/></textElement><text><![CDATA[CARTE]]></text></staticText>
+
+      <staticText><reportElement x="0" y="132" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Théorique :]]></text></staticText>
+      <textField><reportElement x="200" y="132" width="100" height="14"/><textElement textAlignment="Right"><font size="9"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{expectedCard})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="146" width="200" height="14"/><textElement><font size="9"/></textElement><text><![CDATA[Compté :]]></text></staticText>
+      <textField><reportElement x="200" y="146" width="100" height="14"/><textElement textAlignment="Right"><font size="9" isBold="true"/></textElement><textFieldExpression><![CDATA[String.format("%.3f DT", $P{countedCard})]]></textFieldExpression></textField>
+
+      <staticText><reportElement x="0" y="160" width="200" height="14"/><textElement><font size="9" isBold="true"/></textElement><text><![CDATA[Écart :]]></text></staticText>
+      <textField><reportElement x="200" y="160" width="100" height="14"/><textElement textAlignment="Right"><font size="10" isBold="true"/></textElement><textFieldExpression><![CDATA[String.format("%+.3f DT", $P{cardVariance})]]></textFieldExpression></textField>
+
+      <line><reportElement x="0" y="180" width="300" height="1"/></line>
+      <textField isBlankWhenNull="true">
+        <reportElement x="0" y="186" width="300" height="32"/>
+        <textElement><font size="8" isItalic="true"/></textElement>
+        <textFieldExpression><![CDATA[$P{closingNotes} != null ? "Notes : " + $P{closingNotes} : ""]]></textFieldExpression>
+      </textField>
+    </band>
+  </summary>
+
+</jasperReport>
