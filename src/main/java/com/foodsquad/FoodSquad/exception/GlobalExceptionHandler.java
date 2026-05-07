@@ -31,6 +31,15 @@ public class GlobalExceptionHandler {
         return new ResponseEntity<>(response, HttpStatus.NOT_FOUND);
     }
 
+    @ExceptionHandler(InsufficientStockException.class)
+    public ResponseEntity<Map<String, Object>> handleInsufficientStock(InsufficientStockException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("error", ex.getMessage());
+        body.put("code", "STOCK_INSUFFICIENT");
+        body.put("items", ex.getItems());
+        return new ResponseEntity<>(body, HttpStatus.CONFLICT);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public ResponseEntity<Map<String, String>> handleValidationExceptions(MethodArgumentNotValidException ex) {
@@ -65,6 +74,14 @@ public class GlobalExceptionHandler {
         }
 
         return new ResponseEntity<>(errors, status);
+    }
+
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatusException(
+            org.springframework.web.server.ResponseStatusException ex) {
+        Map<String, String> body = new HashMap<>();
+        body.put("error", ex.getReason() != null ? ex.getReason() : ex.getMessage());
+        return ResponseEntity.status(ex.getStatusCode()).body(body);
     }
 
     @ExceptionHandler(Exception.class)

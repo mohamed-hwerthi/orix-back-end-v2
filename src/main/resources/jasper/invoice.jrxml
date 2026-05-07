@@ -8,6 +8,9 @@
     <parameter name="orderId" class="java.lang.String"/>
     <parameter name="totalHT" class="java.lang.Double"/>
     <parameter name="totalTTC" class="java.lang.Double"/>
+    <parameter name="subtotalTTC" class="java.lang.Double"/>
+    <parameter name="discountTTC" class="java.lang.Double"/>
+    <parameter name="hasDiscount" class="java.lang.Boolean"/>
     <parameter name="createdOn" class="java.time.LocalDateTime"/>
     <parameter name="taxDetails" class="java.util.Collection"/>
     <parameter name="addTimbre" class="java.lang.Boolean"/>
@@ -133,36 +136,78 @@
                 <textFieldExpression><![CDATA[String.format("%.3f", $P{totalHT})]]></textFieldExpression>
             </textField>
 
+            <staticText>
+                <reportElement x="0" y="30" width="140" height="20" forecolor="#555555">
+                    <printWhenExpression><![CDATA[$P{hasDiscount}]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right">
+                    <font size="11"/>
+                </textElement>
+                <text><![CDATA[Sous-total TTC:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="200" y="30" width="60" height="20">
+                    <printWhenExpression><![CDATA[$P{hasDiscount}]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right">
+                    <font size="11"/>
+                </textElement>
+                <textFieldExpression><![CDATA[String.format("%.3f", $P{subtotalTTC})]]></textFieldExpression>
+            </textField>
+
+            <staticText>
+                <reportElement x="0" y="50" width="140" height="20" forecolor="#C0392B">
+                    <printWhenExpression><![CDATA[$P{hasDiscount}]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right">
+                    <font isBold="true" size="11"/>
+                </textElement>
+                <text><![CDATA[Réduction promo:]]></text>
+            </staticText>
+            <textField isBlankWhenNull="true">
+                <reportElement x="200" y="50" width="60" height="20" forecolor="#C0392B">
+                    <printWhenExpression><![CDATA[$P{hasDiscount}]]></printWhenExpression>
+                </reportElement>
+                <textElement textAlignment="Right">
+                    <font isBold="true" size="11"/>
+                </textElement>
+                <textFieldExpression><![CDATA["-" + String.format("%.3f", $P{discountTTC})]]></textFieldExpression>
+            </textField>
+
             <textField evaluationTime="Report" isBlankWhenNull="true">
-                <reportElement x="140" y="40" width="120" height="20"/>
+                <reportElement x="140" y="75" width="120" height="20"/>
                 <textElement textAlignment="Right">
                     <font size="10" isItalic="true"/>
                 </textElement>
                 <textFieldExpression><![CDATA[$P{addTimbre} ? "Timbre fiscal : " + String.format("%.3f", $P{timbreAmount}) + " DT" : null]]></textFieldExpression>
             </textField>
 
+            <line>
+                <reportElement x="140" y="98" width="120" height="1" forecolor="#666666"/>
+            </line>
+
             <staticText>
-                <reportElement x="140" y="70" width="60" height="20" forecolor="#000000"/>
+                <reportElement x="140" y="100" width="60" height="22" forecolor="#000000"/>
                 <textElement textAlignment="Right">
-                    <font isBold="true" size="12"/>
+                    <font isBold="true" size="13"/>
                 </textElement>
                 <text><![CDATA[Total TTC:]]></text>
             </staticText>
             <textField>
-                <reportElement x="200" y="70" width="60" height="20"/>
+                <reportElement x="200" y="100" width="60" height="22"/>
                 <textElement textAlignment="Right">
-                    <font isBold="true" size="12"/>
+                    <font isBold="true" size="13"/>
                 </textElement>
                 <textFieldExpression><![CDATA[String.format("%.3f", $P{totalTTC})]]></textFieldExpression>
             </textField>
 
             <line>
-                <reportElement x="0" y="100" width="260" height="1" forecolor="#AAAAAA"/>
+                <reportElement x="0" y="135" width="260" height="1" forecolor="#AAAAAA"/>
             </line>
 
             <!-- Larger image for better scanability -->
             <image hAlign="Center" vAlign="Top">
-                <reportElement x="10" y="110" width="240" height="100">
+                <reportElement x="10" y="145" width="240" height="100">
                     <property name="net.sf.jasperreports.export.pdf.image.scale" value="RetainShape"/>
                     <property name="net.sf.jasperreports.image.dpi" value="300"/>
                     <property name="net.sf.jasperreports.image.rendering" value="HighQuality"/>
@@ -172,7 +217,7 @@
 
             <!-- Merci text with bold styling -->
             <staticText>
-                <reportElement x="0" y="220" width="260" height="30" forecolor="#333333"/>
+                <reportElement x="0" y="255" width="260" height="30" forecolor="#333333"/>
                 <textElement textAlignment="Center" verticalAlignment="Middle">
                     <font size="14" isBold="true" pdfFontName="Helvetica-Bold"/>
                 </textElement>

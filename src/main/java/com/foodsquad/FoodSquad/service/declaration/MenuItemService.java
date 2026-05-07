@@ -31,5 +31,8 @@ public interface MenuItemService {
 
     PaginatedResponseDTO<MenuItemDTO> searchMenuItemsByQuery(String query, Pageable pageable);
 
+    List<MenuItemDTO> getLowStockItems();
+
+    List<Object[]> getStockSummary();
 
 }

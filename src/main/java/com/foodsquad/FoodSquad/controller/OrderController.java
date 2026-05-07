@@ -73,6 +73,14 @@ public class OrderController {
         return orderService.updateOrder(id, orderDTO);
     }
 
+    @Operation(summary = "Rembourser une commande (total ou partiel) avec gestion stock")
+    @PostMapping("/{id}/refund")
+    public ResponseEntity<OrderDTO> refundOrder(
+            @PathVariable String id,
+            @Valid @RequestBody com.foodsquad.FoodSquad.model.dto.RefundRequestDTO request) {
+        return orderService.refundOrder(id, request);
+    }
+
     @Operation(summary = "Delete an order by ID", description = "Delete an existing order by its unique ID.")
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, String>> deleteOrder(

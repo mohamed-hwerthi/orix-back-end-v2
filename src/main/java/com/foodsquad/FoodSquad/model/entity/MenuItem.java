@@ -3,6 +3,7 @@ package com.foodsquad.FoodSquad.model.entity;
 import com.foodsquad.FoodSquad.model.Menu;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.Objects;
 @Entity
 @Table(name = "menu_items")
 @Data
+@EqualsAndHashCode(of = "id")
 public class MenuItem {
 
     @Id
@@ -30,6 +32,33 @@ public class MenuItem {
 
     @Column(nullable = true, name = "codeBar", unique = true)
     private String barCode;
+
+    @Column(nullable = true, unique = true)
+    private String sku;
+
+    @Column(nullable = true)
+    private Double purchasePrice;
+
+    @Column(nullable = false)
+    private Integer stockQuantity = 0;
+
+    @Column(nullable = false)
+    private Integer minStockAlert = 0;
+
+    @Column(nullable = true, length = 20)
+    private String unit;
+
+    @Column(nullable = false)
+    private Boolean isActive = true;
+
+    @Column(nullable = false)
+    private Boolean allowNegativeStock = false;
+
+    @Column
+    private Integer reorderQty;
+
+    @Column(nullable = false)
+    private Boolean hasExpiryDate = false;
 
 
     @ManyToOne(fetch = FetchType.LAZY)
