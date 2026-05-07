@@ -40,6 +40,11 @@ public class InvoiceServiceImp implements InvoiceService {
     private volatile JasperReport cachedInvoiceReport;
     private final Object reportLock = new Object();
 
+    // Cache of the timbre fiscal — rarely changes, was being fetched on every invoice
+    private volatile Double cachedTimbreAmount;
+    private volatile long timbreCacheLoadedAt = 0L;
+    private static final long TIMBRE_CACHE_TTL_MS = 60_000L; // 1 minute
+
 
     Logger log = LoggerFactory.getLogger(InvoiceService.class);
 
@@ -140,47 +145,41 @@ public class InvoiceServiceImp implements InvoiceService {
         return entries;
     }
 
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public byte[] generateInvoice(String orderId) throws Exception {
         JasperReport jasperReport = getCachedInvoiceReport();
 
+        // Use a transactional read so lazy collections (menuItemsWithQuantity → MenuItem.tax)
+        // resolve in a single open session instead of throwing or triggering N+1 queries.
         Order order = orderRepository.findById(orderId)
                 .orElseThrow(() -> new RuntimeException("Order not found"));
 
-        // Calculate totals and tax details
+        Map<MenuItem, Integer> miq = order.getMenuItemsWithQuantity();
+        int itemCount = miq.size();
+
         double totalHT = 0;
         double totalTTC = 0;
-        Map<Tax, Double> taxDetails = new HashMap<>();
+        // Pre-sized to avoid rehashing
+        List<Map<String, Object>> items = new ArrayList<>(itemCount);
 
-        // Prepare items with HT and TTC prices
-        List<Map<String, Object>> items = new ArrayList<>();
-
-        for (Map.Entry<MenuItem, Integer> entry : order.getMenuItemsWithQuantity().entrySet()) {
+        for (Map.Entry<MenuItem, Integer> entry : miq.entrySet()) {
             MenuItem item = entry.getKey();
             int quantity = entry.getValue();
-            double itemTTCUnit = item.getPrice(); // stored TTC
+            double itemTTCUnit = item.getPrice();
             double taxRate = item.getTax() != null ? item.getTax().getRate() : 0.0;
 
-            // Calculate HT from TTC
             double itemHTUnit = itemTTCUnit / (1 + (taxRate / 100));
             double itemHT = itemHTUnit * quantity;
             double itemTTC = itemTTCUnit * quantity;
-            double taxAmount = itemTTC - itemHT;
 
-            // ROUND to 2 decimals using BigDecimal
             itemHTUnit = round(itemHTUnit);
             itemHT = round(itemHT);
             itemTTC = round(itemTTC);
-            taxAmount = round(taxAmount);
-
-            // Accumulate tax
-            if (item.getTax() != null) {
-                taxDetails.merge(item.getTax(), taxAmount, Double::sum);
-            }
 
             totalHT += itemHT;
             totalTTC += itemTTC;
 
-            Map<String, Object> itemData = new HashMap<>();
+            Map<String, Object> itemData = new HashMap<>(8);
             itemData.put("menuItemName", item.getTitle());
             itemData.put("quantity", quantity);
             itemData.put("priceHT", itemHTUnit);
@@ -190,29 +189,18 @@ public class InvoiceServiceImp implements InvoiceService {
             items.add(itemData);
         }
 
-        // Apply discount from the order (authoritative)
         double discountTTC = order.getDiscountAmount() != null ? order.getDiscountAmount() : 0.0;
         boolean hasDiscount = discountTTC > 0;
-        double discountHT = 0.0;
-        if (hasDiscount && totalTTC > 0) {
-            // Pro-rata HT based on the same ratio as catalog HT/TTC
-            discountHT = round(discountTTC * (totalHT / totalTTC));
-        }
 
         double subtotalHT = round(totalHT);
         double subtotalTTC = round(totalTTC);
         double netTTC = round(subtotalTTC - discountTTC);
 
-        // Get the timbre fiscal amount from database
-        Timbre timbre = timbreRepository.findAll().stream().findFirst().orElse(null);
-        double timbreAmount = (timbre != null) ? timbre.getAmount() : 0.0;
-
-        // Check if we need to add timbre fiscal (when TTC >= 1 DT) — base on net amount after discount
+        double timbreAmount = getCachedTimbreAmount();
         boolean addTimbre = (netTTC >= 1.0);
         double finalTTC = addTimbre ? round(netTTC + timbreAmount) : netTTC;
 
-        // Prepare parameters
-        Map<String, Object> parameters = new HashMap<>();
+        Map<String, Object> parameters = new HashMap<>(16);
         parameters.put("orderId", order.getId());
         parameters.put("totalHT", subtotalHT);
         parameters.put("totalTTC", finalTTC);
@@ -220,13 +208,31 @@ public class InvoiceServiceImp implements InvoiceService {
         parameters.put("discountTTC", round(discountTTC));
         parameters.put("hasDiscount", hasDiscount);
         parameters.put("createdOn", order.getCreatedOn());
-        parameters.put("taxDetails", new ArrayList<>(taxDetails.entrySet()));
         parameters.put("addTimbre", addTimbre);
         parameters.put("timbreAmount", timbreAmount);
         parameters.put("net.sf.jasperreports.resource.path", "images");
+
         JRDataSource dataSource = new JRBeanCollectionDataSource(items);
         JasperPrint jasperPrint = JasperFillManager.fillReport(jasperReport, parameters, dataSource);
-        return JasperExportManager.exportReportToPdf(jasperPrint);
+
+        // Stream directly into a sized buffer — avoids extra byte[] copies done by exportReportToPdf
+        java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream(32 * 1024);
+        JasperExportManager.exportReportToPdfStream(jasperPrint, baos);
+        return baos.toByteArray();
+    }
+
+    /** Read the timbre once per minute instead of on every invoice. */
+    private double getCachedTimbreAmount() {
+        long now = System.currentTimeMillis();
+        Double cached = cachedTimbreAmount;
+        if (cached != null && (now - timbreCacheLoadedAt) < TIMBRE_CACHE_TTL_MS) {
+            return cached;
+        }
+        Timbre timbre = timbreRepository.findAll().stream().findFirst().orElse(null);
+        double amount = (timbre != null) ? timbre.getAmount() : 0.0;
+        cachedTimbreAmount = amount;
+        timbreCacheLoadedAt = now;
+        return amount;
     }
 
     private double round(double value) {

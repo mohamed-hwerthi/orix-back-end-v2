@@ -21,6 +21,8 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Controller for managing menus in the Food Squad application.
@@ -33,6 +35,13 @@ import java.util.Locale;
 @Tag(name = "9. Invoice Management", description = "Invoice Management API")
 public class InvoiceController {
     private final InvoiceServiceImp invoiceService;
+
+    /** Daemon thread pool for fire-and-forget physical printing — never blocks response. */
+    private static final ExecutorService PRINT_EXECUTOR = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "thermal-printer-async");
+        t.setDaemon(true);
+        return t;
+    });
 
     public InvoiceController(InvoiceService invoiceServiceImp, InvoiceServiceImp invoiceService) {
 
@@ -68,33 +77,47 @@ public class InvoiceController {
     @GetMapping("/{orderId}")
     public ResponseEntity<byte[]> downloadInvoice(@PathVariable String orderId) {
         try {
-            log.info("order id {}", orderId);
-
+            long t0 = System.currentTimeMillis();
             byte[] pdfBytes = invoiceService.generateInvoice(orderId);
+            long t1 = System.currentTimeMillis();
+            log.info("Invoice {} generated in {} ms ({} bytes)", orderId, (t1 - t0), pdfBytes.length);
 
-            // Save the PDF to a temporary file
+            // Fire-and-forget: physical printing happens off-thread so it NEVER blocks the response.
+            // The browser will receive the PDF immediately; the thermal printer (if any) prints in parallel.
             String fileName = "invoice_" + orderId + ".pdf";
-            Path tempPath = Paths.get(System.getProperty("java.io.tmpdir"), fileName);
-            Files.write(tempPath, pdfBytes);
+            PRINT_EXECUTOR.submit(() -> tryPhysicalPrint(orderId, pdfBytes, fileName));
 
-            ProcessBuilder printProcess = new ProcessBuilder("lp", "-d", "EPSON_TM-T20X", tempPath.toString());
-            Process process = printProcess.start();
-            int exitCode = process.waitFor();
-
-            if (exitCode != 0) {
-                log.error("Failed to print invoice. Exit code: {}", exitCode);
-            }
-
-            // Prepare the response
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_PDF);
-            headers.setContentDispositionFormData("attachment", fileName);
+            headers.setContentDispositionFormData("inline", fileName); // inline → browser preview faster than attachment
+            headers.setCacheControl("no-cache, no-store, must-revalidate");
             return new ResponseEntity<>(pdfBytes, headers, HttpStatus.OK);
 
         } catch (Exception e) {
-            log.error("Error generating or printing invoice", e);
+            log.error("Error generating invoice", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 
+    /** Off-thread thermal printing. Failures here NEVER affect the API response. */
+    private void tryPhysicalPrint(String orderId, byte[] pdfBytes, String fileName) {
+        try {
+            Path tempPath = Paths.get(System.getProperty("java.io.tmpdir"), fileName);
+            Files.write(tempPath, pdfBytes);
+            ProcessBuilder pb = new ProcessBuilder("lp", "-d", "EPSON_TM-T20X", tempPath.toString());
+            pb.redirectErrorStream(true);
+            Process process = pb.start();
+            // Bound the wait so a hung printer never accumulates threads
+            boolean finished = process.waitFor(5, java.util.concurrent.TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                log.warn("Thermal print {} killed after timeout", orderId);
+            } else if (process.exitValue() != 0) {
+                log.warn("Thermal print {} exit={}", orderId, process.exitValue());
+            }
+        } catch (Exception e) {
+            // Most common: no printer attached → just log at debug level
+            log.debug("Thermal print skipped for {}: {}", orderId, e.getMessage());
+        }
+    }
 }

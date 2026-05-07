@@ -130,6 +130,11 @@ public class MenuItemServiceImp implements MenuItemService {
         if (menuItem.getMinStockAlert() == null) menuItem.setMinStockAlert(0);
         if (menuItem.getPrice() == null) menuItem.setPrice(0.0);
 
+        // Convert empty strings to null on UNIQUE columns
+        // (DB UNIQUE accepts multiple NULLs but rejects multiple "")
+        if (menuItem.getSku() != null && menuItem.getSku().isBlank()) menuItem.setSku(null);
+        if (menuItem.getBarCode() != null && menuItem.getBarCode().isBlank()) menuItem.setBarCode(null);
+
         // Auto-assign currency: explicit ID > first available
         if (menuItemDTO.getCurrency() != null && menuItemDTO.getCurrency().getId() != null) {
             currencyRepository.findById(menuItemDTO.getCurrency().getId()).ifPresent(menuItem::setCurrency);

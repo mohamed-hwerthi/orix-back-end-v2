@@ -3,6 +3,7 @@ package com.foodsquad.FoodSquad.model.entity;
 import com.foodsquad.FoodSquad.model.Menu;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -12,6 +13,7 @@ import java.util.Objects;
 @Entity
 @Table(name = "menu_items")
 @Data
+@EqualsAndHashCode(of = "id")
 public class MenuItem {
 
     @Id
