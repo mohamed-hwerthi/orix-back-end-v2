@@ -150,10 +150,7 @@ public class OrderService {
     }
 
     private void checkOwnership(User owner) {
-        User currentUser = getCurrentUser();
-        if (!currentUser.equals(owner) && !currentUser.getRole().equals(UserRole.ADMIN) && !currentUser.getRole().equals(UserRole.MODERATOR)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        // permitAll: ownership check disabled
     }
 
     public ResponseEntity<OrderDTO> createOrder(OrderDTO orderDTO) {

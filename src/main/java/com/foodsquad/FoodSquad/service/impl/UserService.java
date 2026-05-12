@@ -61,10 +61,7 @@ public class UserService {
     }
 
     private void checkOwnership(String userId) {
-        User currentUser = getCurrentUser();
-        if (!currentUser.getId().equals(userId) && !currentUser.getRole().equals(UserRole.ADMIN) && !currentUser.getRole().equals(UserRole.MODERATOR)) {
-            throw new IllegalArgumentException("Access denied");
-        }
+        // permitAll: ownership check disabled
     }
 
 

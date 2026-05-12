@@ -19,6 +19,11 @@ public interface MenuItemMapper {
    List<MenuItemDTO> toDtoList(List<MenuItem> menuItems);
    @Mapping(target = "id", ignore = true)
    @Mapping(target = "user", ignore = true)
+   @Mapping(target = "currency", ignore = true)
+   @Mapping(target = "tax", ignore = true)
+   @Mapping(target = "createdOn", ignore = true)
+   @Mapping(target = "reviews", ignore = true)
+   @Mapping(target = "menus", ignore = true)
     void updateMenuItemFromDto(MenuItemDTO dto, @MappingTarget MenuItem entity);
 
 }

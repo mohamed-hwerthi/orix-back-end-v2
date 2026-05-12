@@ -44,44 +44,7 @@ public class SecurityConfig {
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(Customizer.withDefaults())
                 .authorizeHttpRequests(authorizeRequests ->
-                        authorizeRequests
-                                .requestMatchers("/api/auth/**").permitAll()
-                                .requestMatchers("/api/token/**").permitAll()
-                                .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                                .requestMatchers(HttpMethod.POST, "/api/media/**").permitAll()
-                                .requestMatchers(HttpMethod.GET , "/uploads/**").permitAll()
-                                .requestMatchers(HttpMethod.GET , "/images/**").permitAll()
-
-
-                                .requestMatchers(HttpMethod.GET, "/api/invoice/**").permitAll()
-                                .requestMatchers(HttpMethod.POST, "/api/invoice/**").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/currency/**").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/users/**").hasAnyRole("ADMIN", "MODERATOR")
-                                .requestMatchers(HttpMethod.POST, "/api/users/**").hasAnyRole("ADMIN", "MODERATOR")
-                                .requestMatchers(HttpMethod.PUT, "/api/users/**").hasAnyRole("ADMIN", "MODERATOR", "NORMAL")
-                                .requestMatchers(HttpMethod.DELETE, "/api/users/**").hasRole("ADMIN")
-
-                                .requestMatchers(HttpMethod.GET, "/api/orders/**").permitAll()
-                                .requestMatchers(HttpMethod.POST, "/api/orders/**").permitAll()
-                                .requestMatchers(HttpMethod.PUT, "/api/orders/**").permitAll()
-                                .requestMatchers(HttpMethod.DELETE, "/api/orders/**").permitAll()
-
-                                .requestMatchers(HttpMethod.GET, "/api/timbres/**").permitAll()
-                                .requestMatchers(HttpMethod.POST, "/api/timbres/**").permitAll()
-                                .requestMatchers(HttpMethod.PUT, "/api/timbres/**").permitAll()
-                                .requestMatchers(HttpMethod.DELETE, "/api/timbres/**").permitAll()
-
-                                .requestMatchers(HttpMethod.GET, "/api/menu-items/**").permitAll()
-                                .requestMatchers(HttpMethod.POST, "/api/menu-items/**").permitAll()
-                                .requestMatchers(HttpMethod.PUT, "/api/menu-items/**").permitAll()
-                                .requestMatchers(HttpMethod.DELETE, "/api/menu-items/**").permitAll()
-                                .requestMatchers(HttpMethod.GET, "/api/reviews/**").hasAnyRole("ADMIN", "MODERATOR", "NORMAL")
-                                .requestMatchers(HttpMethod.POST, "/api/reviews/**").hasAnyRole("ADMIN", "MODERATOR", "NORMAL")
-                                .requestMatchers(HttpMethod.PUT, "/api/reviews/**").hasAnyRole("ADMIN", "MODERATOR")
-                                .requestMatchers(HttpMethod.DELETE, "/api/reviews/**").hasAnyRole("ADMIN")
-
-                                .requestMatchers(HttpMethod.GET, "/api/categories/**").permitAll()
-                                .anyRequest().authenticated()
+                        authorizeRequests.anyRequest().permitAll()
                 )
                 .exceptionHandling(exceptionHandling ->
                         exceptionHandling
